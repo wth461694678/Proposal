@@ -67,6 +67,8 @@ class ProposalApp {
             this.preloadVideo(CONFIG.assets.scene1),
             this.preloadVideo(CONFIG.assets.scene2),
             this.preloadVideo(CONFIG.assets.scene3),
+            this.preloadVideo(CONFIG.assets.scene3_1),
+            this.preloadVideo(CONFIG.assets.scene3_2),
             this.preloadVideo(CONFIG.assets.scene4)
         ];
 
@@ -287,91 +289,128 @@ class ProposalApp {
 
         // 动态创建并播放视频
         const scene = CONFIG.scenes[sceneIndex];
-        const video = document.createElement('video');
-        video.className = 'video-background';
-        video.src = CONFIG.assets[scene.video];
-        video.muted = false;
-        video.playsInline = true;
-        video.currentTime = 0;
-        video.volume = 0;
-
-        // 将视频插入到蒙版之下
         const videoOverlay = document.querySelector('.video-overlay');
-        if (videoOverlay) {
-            this.appElement.insertBefore(video, videoOverlay);
-        } else {
-            this.appElement.appendChild(video);
-        }
 
-        // 移除视频蒙版淡入淡出效果
+        // Special-case for scene3: play scene3_1 then scene3_2 back-to-back
+        // without any fade in/out or volume ramps.
+        if (scene.video === 'scene3') {
+            const playSegment = (assetKey, onEnded) => {
+                const v = document.createElement('video');
+                v.className = 'video-background';
+                v.src = CONFIG.assets[assetKey];
+                v.muted = false;
+                v.playsInline = true;
+                v.currentTime = 0;
+                // No fades: play at full volume immediately
+                v.volume = 1;
 
-        // 开始播放视频
-        video.play();
-
-        // 视频音量渐强（时间精确，支持取消）
-        this.fadeInVideoVolume(video);
-
-        // 在视频结束前进行音量渐弱（带安全提前量，避免突兀）
-        const fadeDurationMs = CONFIG.timings.bgmFade;
-        const safetyMarginMs = 250; // 提前量，避免 timeupdate 不及时
-        let hasStartedVideoFadeOut = false;
-
-        const startFadeOutIfNeeded = (remainingMs) => {
-            if (hasStartedVideoFadeOut) return;
-            if (remainingMs <= fadeDurationMs + safetyMarginMs) {
-                hasStartedVideoFadeOut = true;
-                const duration = Math.max(150, Math.min(fadeDurationMs, Math.max(80, remainingMs - 40)));
-                this.fadeOutVideoVolume(video, duration);
-            }
-        };
-
-        const scheduleFadeOut = () => {
-            if (!isFinite(video.duration) || video.duration <= 0) return;
-            const remainingMs = Math.max(0, (video.duration - video.currentTime) * 1000);
-            startFadeOutIfNeeded(remainingMs);
-
-            const triggerAtMs = Math.max(0, (video.duration * 1000) - (fadeDurationMs + safetyMarginMs));
-            const delayMs = Math.max(0, triggerAtMs - (video.currentTime * 1000));
-            const timeoutId = setTimeout(() => {
-                if (!hasStartedVideoFadeOut) {
-                    const nowRemaining = Math.max(0, (video.duration - video.currentTime) * 1000);
-                    startFadeOutIfNeeded(nowRemaining);
+                if (videoOverlay) {
+                    this.appElement.insertBefore(v, videoOverlay);
+                } else {
+                    this.appElement.appendChild(v);
                 }
-            }, delayMs);
 
-            const clear = () => {
-                clearTimeout(timeoutId);
-                video.removeEventListener('ended', clear);
-                video.removeEventListener('pause', clear);
+                // Start playback immediately
+                v.play();
+
+                // When this segment ends, remove its element and call next
+                v.addEventListener('ended', () => {
+                    // ensure element cleaned up
+                    try { v.remove(); } catch (e) {}
+                    if (typeof onEnded === 'function') onEnded();
+                }, { once: true });
             };
-            video.addEventListener('ended', clear);
-            video.addEventListener('pause', clear);
-        };
 
-        const onLoadedMetadata = () => {
-            scheduleFadeOut();
-        };
-        video.addEventListener('loadedmetadata', onLoadedMetadata, { once: true });
+            // Play first then second, then continue flow
+            playSegment('scene3_1', () => {
+                playSegment('scene3_2', () => {
+                    this.transitionToNextScene();
+                });
+            });
+        } else {
+            // 非 scene3 的原始行为（保留淡入淡出逻辑）
+            const video = document.createElement('video');
+            video.className = 'video-background';
+            video.src = CONFIG.assets[scene.video];
+            video.muted = false;
+            video.playsInline = true;
+            video.currentTime = 0;
+            video.volume = 0;
 
-        // 兜底：timeupdate 检查剩余时间
-        const onTimeUpdate = () => {
-            if (!isFinite(video.duration) || video.duration <= 0) return;
-            const remainingMs = Math.max(0, (video.duration - video.currentTime) * 1000);
-            startFadeOutIfNeeded(remainingMs);
-        };
-        video.addEventListener('timeupdate', onTimeUpdate);
-
-        // 监听视频结束
-        video.addEventListener('ended', () => {
-            // 若仍有音量且未开始淡出，进行快速收尾，避免突兀
-            if (video.volume > 0.02 && !hasStartedVideoFadeOut) {
-                this.fadeOutVideoVolume(video, 180);
+            if (videoOverlay) {
+                this.appElement.insertBefore(video, videoOverlay);
             } else {
-                video.volume = 0;
+                this.appElement.appendChild(video);
             }
-            video.removeEventListener('timeupdate', onTimeUpdate);
-            this.transitionToNextScene();
-        });
+
+            // 开始播放视频
+            video.play();
+
+            // 视频音量渐强（时间精确，支持取消）
+            this.fadeInVideoVolume(video);
+
+            // 在视频结束前进行音量渐弱（带安全提前量，避免突兀）
+            const fadeDurationMs = CONFIG.timings.bgmFade;
+            const safetyMarginMs = 250; // 提前量，避免 timeupdate 不及时
+            let hasStartedVideoFadeOut = false;
+
+            const startFadeOutIfNeeded = (remainingMs) => {
+                if (hasStartedVideoFadeOut) return;
+                if (remainingMs <= fadeDurationMs + safetyMarginMs) {
+                    hasStartedVideoFadeOut = true;
+                    const duration = Math.max(150, Math.min(fadeDurationMs, Math.max(80, remainingMs - 40)));
+                    this.fadeOutVideoVolume(video, duration);
+                }
+            };
+
+            const scheduleFadeOut = () => {
+                if (!isFinite(video.duration) || video.duration <= 0) return;
+                const remainingMs = Math.max(0, (video.duration - video.currentTime) * 1000);
+                startFadeOutIfNeeded(remainingMs);
+
+                const triggerAtMs = Math.max(0, (video.duration * 1000) - (fadeDurationMs + safetyMarginMs));
+                const delayMs = Math.max(0, triggerAtMs - (video.currentTime * 1000));
+                const timeoutId = setTimeout(() => {
+                    if (!hasStartedVideoFadeOut) {
+                        const nowRemaining = Math.max(0, (video.duration - video.currentTime) * 1000);
+                        startFadeOutIfNeeded(nowRemaining);
+                    }
+                }, delayMs);
+
+                const clear = () => {
+                    clearTimeout(timeoutId);
+                    video.removeEventListener('ended', clear);
+                    video.removeEventListener('pause', clear);
+                };
+                video.addEventListener('ended', clear);
+                video.addEventListener('pause', clear);
+            };
+
+            const onLoadedMetadata = () => {
+                scheduleFadeOut();
+            };
+            video.addEventListener('loadedmetadata', onLoadedMetadata, { once: true });
+
+            // 兜底：timeupdate 检查剩余时间
+            const onTimeUpdate = () => {
+                if (!isFinite(video.duration) || video.duration <= 0) return;
+                const remainingMs = Math.max(0, (video.duration - video.currentTime) * 1000);
+                startFadeOutIfNeeded(remainingMs);
+            };
+            video.addEventListener('timeupdate', onTimeUpdate);
+
+            // 监听视频结束
+            video.addEventListener('ended', () => {
+                // 若仍有音量且未开始淡出，进行快速收尾，避免突兀
+                if (video.volume > 0.02 && !hasStartedVideoFadeOut) {
+                    this.fadeOutVideoVolume(video, 180);
+                } else {
+                    video.volume = 0;
+                }
+                video.removeEventListener('timeupdate', onTimeUpdate);
+                this.transitionToNextScene();
+            });
+        }
 
         // 移除问题容器
         setTimeout(() => {
