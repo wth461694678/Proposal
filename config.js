@@ -7,9 +7,9 @@ window.CONFIG = {
         end: 'asset/end.mp3',
         scene1: 'asset/scene1.mp4',
         scene2: 'asset/scene2.mp4',
-    scene3: 'asset/scene3.mp4',
-    scene3_1: 'asset/scene3_1.mp4',
-    scene3_2: 'asset/scene3_2.mp4',
+        scene3: 'asset/scene3.mp4',
+        scene3_1: 'asset/scene3_1.mp4',
+        scene3_2: 'asset/scene3_2.mp4',
         scene4: 'asset/scene4.mp4',
         font: 'asset/handwriting.ttf'
     },

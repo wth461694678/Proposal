@@ -263,8 +263,10 @@ class ProposalApp {
             this.fadeOutBGM();
         }
         if (this.questionBgm) {
-            try { this.questionBgm.currentTime = 0;
-                this.questionBgm.play().catch(() => {}); } catch (e) {}
+            try {
+                this.questionBgm.currentTime = 0;
+                this.questionBgm.play().catch(() => {});
+            } catch (e) {}
             this.fadeInAudio(this.questionBgm, 0.7, CONFIG.timings.bgmFade);
         }
     }
